@@ -27,6 +27,7 @@ import org.gradle.api.internal.TaskInternal
 import org.gradle.api.internal.provider.ConfigurationTimeBarrier
 import org.gradle.api.internal.tasks.execution.TaskExecutionAccessListener
 import org.gradle.configuration.internal.UserCodeApplicationContext
+import org.gradle.configurationcache.TaskExecutionTracker
 import org.gradle.configurationcache.problems.DocumentationSection.RequirementsBuildListeners
 import org.gradle.configurationcache.problems.DocumentationSection.RequirementsUseProjectDuringExecution
 import org.gradle.configurationcache.problems.ProblemsListener
@@ -46,7 +47,8 @@ interface ConfigurationCacheProblemsListener : TaskExecutionAccessListener, Buil
 class DefaultConfigurationCacheProblemsListener internal constructor(
     private val problems: ProblemsListener,
     private val userCodeApplicationContext: UserCodeApplicationContext,
-    private val configurationTimeBarrier: ConfigurationTimeBarrier
+    private val configurationTimeBarrier: ConfigurationTimeBarrier,
+    private val taskExecutionTracker: TaskExecutionTracker,
 ) : ConfigurationCacheProblemsListener {
 
     override fun onProjectAccess(invocationDescription: String, task: TaskInternal) {
@@ -64,7 +66,7 @@ class DefaultConfigurationCacheProblemsListener internal constructor(
     }
 
     override fun onExternalProcessStarted(command: String) {
-        if (!atConfigurationTime()) {
+        if (!atConfigurationTime() || taskExecutionTracker.isCurrentThreadExecutingTaskBuildOperation()) {
             return
         }
         problems.onProblem(

@@ -46,6 +46,7 @@ class ConfigurationCacheServices : AbstractPluginServiceRegistry() {
             add(DefaultBuildToolingModelControllerFactory::class.java)
             add(ConfigurationCacheRepository::class.java)
             add(InstrumentedInputAccessListener::class.java)
+            add(DefaultTaskExecutionTracker::class.java)
             add(ConfigurationCacheFingerprintController::class.java)
         }
     }
