@@ -21,6 +21,7 @@ import org.gradle.configuration.project.ConfigureProjectBuildOperationType
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.BuildOperationsFixture
 import org.gradle.integtests.fixtures.executer.ExecutionFailure
+import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 
 class ConfigurationCacheFixture {
     static final String CONFIGURATION_CACHE_MESSAGE = "Configuration cache is an incubating feature."
@@ -178,7 +179,7 @@ class ConfigurationCacheFixture {
     }
 
     void assertStateLoaded(LoadDetails details) {
-        spec.outputContains("Reusing configuration cache.")
+        assertLoadLogged()
         spec.postBuildOutputContains("Configuration cache entry ${details.storeAction}.")
 
         configurationCacheBuildOperations.assertStateLoaded()
@@ -199,7 +200,7 @@ class ConfigurationCacheFixture {
         closure()
 
         assertHasWarningThatIncubatingFeatureUsed()
-        spec.outputContains("Reusing configuration cache.")
+        assertLoadLogged()
         spec.postBuildOutputContains("Configuration cache entry ${details.storeAction}.")
 
         configurationCacheBuildOperations.assertStateLoaded()
@@ -236,17 +237,37 @@ class ConfigurationCacheFixture {
     }
 
     private void assertHasWarningThatIncubatingFeatureUsed() {
+        if (quietLogging) {
+            // Runs in quiet mode, and does not log anything
+            return
+        }
         spec.outputContains(CONFIGURATION_CACHE_MESSAGE)
         spec.outputDoesNotContain(ISOLATED_PROJECTS_MESSAGE)
         spec.outputDoesNotContain(CONFIGURE_ON_DEMAND_MESSAGE)
     }
 
+    private assertLoadLogged() {
+        if (quietLogging) {
+            // Runs in quiet mode, and does not log anything
+            return
+        }
+        spec.outputContains("Reusing configuration cache.")
+    }
+
     private void assertHasStoreReason(HasBuildActions details) {
+        if (quietLogging) {
+            // Runs in quiet mode, and does not log anything
+            return
+        }
         if (details.runsTasks) {
             spec.outputContains("Calculating task graph as no configuration cache is available for tasks:")
         } else {
             spec.outputContains("Creating tooling model as no configuration cache is available for the requested model")
         }
+    }
+
+    private boolean isQuietLogging() {
+        spec.executer instanceof GradleContextualExecuter && GradleContextualExecuter.configCache
     }
 
     private void assertHasRecreateReason(HasBuildActions details, HasInvalidationReason invalidationDetails) {
