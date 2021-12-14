@@ -121,6 +121,11 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
 
     private final DefaultTaskDependency dependencies;
 
+    /**
+     * "lifecycle dependencies" are dependencies declared via an explicit {@link Task#dependsOn(Object...)}
+     */
+    private final DefaultTaskDependency lifecycleDependencies;
+
     private final DefaultTaskDependency mustRunAfter;
 
     private final DefaultTaskDependency finalizedBy;
@@ -138,6 +143,8 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
     private AndSpec<Task> onlyIfSpec = createNewOnlyIfSpec();
 
     private String reasonNotToTrackState;
+
+    private boolean compatibleWithConfigurationCache = true;
 
     private final ServiceRegistry services;
 
@@ -180,6 +187,8 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
         this.mustRunAfter = new DefaultTaskDependency(tasks);
         this.finalizedBy = new DefaultTaskDependency(tasks);
         this.shouldRunAfter = new DefaultTaskDependency(tasks);
+        this.lifecycleDependencies = new DefaultTaskDependency(tasks);
+
         this.services = project.getServices();
 
         PropertyWalker propertyWalker = services.get(PropertyWalker.class);
@@ -190,7 +199,7 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
         taskDestroyables = new DefaultTaskDestroyables(taskMutator, fileCollectionFactory);
         taskLocalState = new DefaultTaskLocalState(taskMutator, fileCollectionFactory);
 
-        this.dependencies = new DefaultTaskDependency(tasks, ImmutableSet.of(taskInputs));
+        this.dependencies = new DefaultTaskDependency(tasks, ImmutableSet.of(taskInputs, lifecycleDependencies));
 
         this.timeout = project.getObjects().property(Duration.class);
     }
@@ -290,9 +299,15 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
 
     @Internal
     @Override
+    public TaskDependencyInternal getLifecycleDependencies() {
+        return lifecycleDependencies;
+    }
+
+    @Internal
+    @Override
     public Set<Object> getDependsOn() {
         notifyTaskDependenciesAccess("Task.dependsOn");
-        return dependencies.getMutableValues();
+        return lifecycleDependencies.getMutableValues();
     }
 
     @Override
@@ -300,7 +315,7 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
         taskMutator.mutate("Task.setDependsOn(Iterable)", new Runnable() {
             @Override
             public void run() {
-                dependencies.setValues(dependsOn);
+                lifecycleDependencies.setValues(dependsOn);
             }
         });
     }
@@ -374,6 +389,18 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
         return Optional.ofNullable(reasonNotToTrackState);
     }
 
+    @Override
+    public void notCompatibleWithConfigurationCache(String reason) {
+        taskMutator.mutate("Task.notCompatibleWithConfigurationCache(String)", () -> {
+            compatibleWithConfigurationCache = false;
+        });
+    }
+
+    @Override
+    public boolean isCompatibleWithConfigurationCache() {
+        return compatibleWithConfigurationCache;
+    }
+
     @Internal
     @Override
     public boolean getDidWork() {
@@ -432,7 +459,7 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
         taskMutator.mutate("Task.dependsOn(Object...)", new Runnable() {
             @Override
             public void run() {
-                dependencies.add(paths);
+                lifecycleDependencies.add(paths);
             }
         });
         return this;

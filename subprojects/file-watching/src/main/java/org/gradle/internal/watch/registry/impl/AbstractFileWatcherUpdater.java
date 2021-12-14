@@ -30,6 +30,7 @@ import org.gradle.internal.watch.vfs.WatchMode;
 import javax.annotation.CheckReturnValue;
 import java.io.File;
 import java.util.Collection;
+import java.util.List;
 import java.util.stream.Stream;
 
 public abstract class AbstractFileWatcherUpdater implements FileWatcherUpdater {
@@ -54,9 +55,8 @@ public abstract class AbstractFileWatcherUpdater implements FileWatcherUpdater {
     }
 
     @Override
-    public final SnapshotHierarchy updateVfsOnBuildStarted(SnapshotHierarchy root, WatchMode watchMode) {
-        watchableHierarchies.updateUnsupportedFileSystems(watchMode);
-        SnapshotHierarchy newRoot = watchableHierarchies.removeUnwatchableContentOnBuildStart(root, createInvalidator(), watchMode);
+    public final SnapshotHierarchy updateVfsOnBuildStarted(SnapshotHierarchy root, WatchMode watchMode, List<File> unsupportedFileSystems) {
+        SnapshotHierarchy newRoot = watchableHierarchies.removeUnwatchableContentOnBuildStart(root, createInvalidator(), watchMode, unsupportedFileSystems);
         newRoot = doUpdateVfsOnBuildStarted(newRoot);
         if (root != newRoot) {
             update(newRoot);
@@ -78,12 +78,12 @@ public abstract class AbstractFileWatcherUpdater implements FileWatcherUpdater {
     protected abstract boolean handleVirtualFileSystemContentsChanged(Collection<FileSystemLocationSnapshot> removedSnapshots, Collection<FileSystemLocationSnapshot> addedSnapshots, SnapshotHierarchy root);
 
     @Override
-    public SnapshotHierarchy updateVfsOnBuildFinished(SnapshotHierarchy root, WatchMode watchMode, int maximumNumberOfWatchedHierarchies) {
+    public SnapshotHierarchy updateVfsOnBuildFinished(SnapshotHierarchy root, WatchMode watchMode, int maximumNumberOfWatchedHierarchies, List<File> unsupportedFileSystems) {
         SnapshotHierarchy newRoot = watchableHierarchies.removeUnwatchableContentOnBuildFinished(
             root,
-            watchMode,
             watchedFiles::contains,
             maximumNumberOfWatchedHierarchies,
+            unsupportedFileSystems,
             createInvalidator()
         );
 
@@ -106,8 +106,11 @@ public abstract class AbstractFileWatcherUpdater implements FileWatcherUpdater {
     protected abstract WatchableHierarchies.Invalidator createInvalidator();
 
     private void update(SnapshotHierarchy root) {
+        FileHierarchySet oldWatchedFiles = watchedFiles;
         watchedFiles = resolveWatchedFiles(watchableHierarchies, root);
-        updateWatchesOnChangedWatchedFiles(watchedFiles);
+        if (!watchedFiles.equals(oldWatchedFiles)) {
+            updateWatchesOnChangedWatchedFiles(watchedFiles);
+        }
 
         // Probe every hierarchy that is watched, even ones nested inside others
         ImmutableSet<File> oldProbedHierarchies = probedHierarchies;
@@ -139,7 +142,7 @@ public abstract class AbstractFileWatcherUpdater implements FileWatcherUpdater {
             });
     }
 
-    protected abstract void updateWatchesOnChangedWatchedFiles(FileHierarchySet watchedFiles);
+    protected abstract void updateWatchesOnChangedWatchedFiles(FileHierarchySet newWatchedFiles);
 
     protected abstract void startWatchingProbeDirectory(File probeDirectory);
 
